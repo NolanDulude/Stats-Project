@@ -1,0 +1,176 @@
+---
+title: "Stats Project"
+author: "Nolan Dulude"
+date: "2024-04-05"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(car)
+train <- read.csv(choose.files())
+head(train)
+
+#Question 1
+#Selecting for NAmes, Edwards, and BrkSide
+match1 <- grepl("NAmes", train$Neighborhood)
+match2 <- grepl("Edwards", train$Neighborhood)
+match3 <- grepl("BrkSide", train$Neighborhood)
+
+new1 <- train[match1, ]
+new2 <- train[match2, ]
+new3 <- train[match3, ]
+
+#New data set
+newtrain <- rbind(new1, new2, new3)
+
+#Graphing each Neighborhood alone and together
+newtrain %>% filter(Neighborhood == "NAmes") %>% ggplot(aes(x = GrLivArea, y = SalePrice, colour = Neighborhood)) + geom_point() + labs(x = "Square Footage", y = "Sales Price") + ggtitle("Scatterplot of Square Footage vs Sales Price for the NAmes Neighborhood")
+
+newtrain %>% filter(Neighborhood == "Edwards") %>% ggplot(aes(x = GrLivArea, y = SalePrice, colour = Neighborhood)) + geom_point() + labs(x = "Square Footage", y = "Sales Price") + ggtitle("Scatterplot of Square Footage vs Sales Price for the Edwards Neighborhood")
+
+newtrain %>% filter(Neighborhood == "BrkSide") %>% ggplot(aes(x = GrLivArea, y = SalePrice, colour = Neighborhood)) + geom_point() + labs(x = "Square Footage", y = "Sales Price") + ggtitle("Scatterplot of Square Footage vs Sales Price for the BrkSide Neighborhood")
+
+
+newtrain %>% ggplot(aes(x = GrLivArea, y = SalePrice, colour = Neighborhood))+geom_point() + geom_smooth(method = "lm", se = FALSE) + labs(x = "Square Footage", y = "Sales Price") + ggtitle("Scatterplot of Square Footage vs Sales Price")
+
+#After looking at the residual plot and Cooks plot there appears to be a couple outliers. 
+
+which(newtrain$Id == 1299)
+id1 <- newtrain[313, c("GrLivArea", "SalePrice", "Neighborhood")]
+which(newtrain$Id == 524)
+id2 <- newtrain[258, c("GrLivArea", "SalePrice", "Neighborhood")]
+summary(newtrain$SalePrice)  
+summary(newtrain$GrLivArea) 
+
+fit = lm(SalePrice~GrLivArea + Neighborhood, data = newtrain)
+fit_summary <- summary(fit)
+
+#Visualize LRM
+par(mfrow = c(2, 2))
+plot(fit)
+#Calculate Cook's distances
+cooksd <- cooks.distance(fit)
+
+#Plot Cook's distances
+plot(cooksd, pch = 19, frame = FALSE, main = "Cook's Distance Plot")
+abline(h = 4/length(cooksd), col = "red")  # Add a horizontal line at Cook's distance = 4/n
+
+
+#Set a threshold for identifying outliers.
+threshold <- 16/length(cooksd)
+
+#Identify outliers based on Cook's distance exceeding the threshold
+outliers <- which(cooksd > threshold)
+
+#Print the indices of outliers
+print(outliers)
+print(train[c(524, 1299, 643, 725, 1424), ])
+
+#Outliers were removed
+newer_train<- newtrain[-c(313, 258, 99, 275, 322), ]
+
+
+#After removal of Outliers
+cooksd <- cooks.distance(fit)
+plot(cooksd, pch = 19, frame = FALSE, main = "Cook's Distance Plot")
+abline(h = 4/length(cooksd), col = "red")  # Add a horizontal line at Cook's distance = 4/n
+
+#Graphing each Neighborhood alone and together
+newer_train %>% filter(Neighborhood == "NAmes") %>% ggplot(aes(x = GrLivArea, y = SalePrice, colour = Neighborhood)) + geom_point() + labs(x = "Square Footage", y = "Sales Price") + ggtitle("Scatterplot of Square Footage vs Sales Price for the NAmes Neighborhood")
+
+newer_train %>% filter(Neighborhood == "Edwards") %>% ggplot(aes(x = GrLivArea, y = SalePrice, colour = Neighborhood)) + geom_point() + labs(x = "Square Footage", y = "Sales Price") + ggtitle("Scatterplot of Square Footage vs Sales Price for the Edwards Neighborhood")
+
+newer_train %>% filter(Neighborhood == "BrkSide") %>% ggplot(aes(x = GrLivArea, y = SalePrice, colour = Neighborhood)) + geom_point() + labs(x = "Square Footage", y = "Sales Price") + ggtitle("Scatterplot of Square Footage vs Sales Price for the BrkSide Neighborhood")
+
+
+newer_train %>% ggplot(aes(x = GrLivArea, y = SalePrice, colour = Neighborhood))+geom_point() + geom_smooth(method = "lm", se = FALSE) + labs(x = "Square Footage", y = "Sales Price") + ggtitle("Scatterplot of Square Footage vs Sales Price")
+
+  
+#Here is the Model and with the ADJR^2, and internal CV Press, along with confidence intervals. 
+fit1 = lm(SalePrice~GrLivArea + Neighborhood+GrLivArea*Neighborhood, data = newtrain)
+fit_summary1 <- summary(fit1)
+adj_r_squared <- fit_summary1$adj.r.squared
+internal_cv_press <- fit_summary1$cov.unscaled
+conf_intervals <- confint(fit1)
+par(mfrow = c(2, 2))
+plot(fit1)
+
+
+
+
+
+```
+
+
+
+```{r}
+#Here is the code of the R Shiny app
+library(shiny)
+library(ggplot2)
+
+train <- read.csv(choose.files())
+
+#Selecting for NAmes, Edwards, and BrkSide
+match1 <- grepl("NAmes", train$Neighborhood)
+match2 <- grepl("Edwards", train$Neighborhood)
+match3 <- grepl("BrkSide", train$Neighborhood)
+
+new1 <- train[match1, ]
+new2 <- train[match2, ]
+new3 <- train[match3, ]
+
+#New data set
+newtrain <- rbind(new1, new2, new3)
+
+ui <- fluidPage(
+  titlePanel("House Price vs. Square Footage"),
+  sidebarLayout(
+    sidebarPanel(
+      selectInput("neighborhood",
+                  "Choose a Neighborhood:",
+                  choices = c("NAmes", "Edwards", "BrkSide"),
+                  selected = "NAmes")
+    ),
+    mainPanel(
+      plotOutput("scatterplot"),
+      plotOutput("combined_plot")
+    )
+  )
+)
+
+# Server Logic
+server <- function(input, output) {
+  
+  output$scatterplot <- renderPlot({
+    neighborhood_data <- subset(newtrain, Neighborhood == input$neighborhood)
+    ggplot(neighborhood_data, aes(x = GrLivArea, y = SalePrice)) +
+      geom_point() +
+      geom_smooth(method = "lm", se = FALSE) +  # Add linear trend line
+      labs(title = paste("House Price vs. Square Footage in", input$neighborhood),
+           x = "Square Footage",
+           y = "Price")
+  })
+  
+  output$combined_plot <- renderPlot({
+    ggplot(newtrain, aes(x = GrLivArea, y = SalePrice, color = Neighborhood)) +
+      geom_point() +
+      geom_smooth(method = "lm", se = FALSE) +  # Add linear trend line
+      labs(title = "House Price vs. Square Footage (Combined)",
+           x = "Square Footage",
+           y = "Price",
+           color = "Neighborhood")
+  })
+}
+
+# Run the App
+shinyApp(ui = ui, server = server)
+```
+
+
+```{r}
+
+train1 = subset(train, select=-c(Id))
+head(train)
+num_observations <- nrow(train1)
+print(num_observations
