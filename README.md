@@ -1,0 +1,1 @@
+In this study, prompted by our client, Century 21 Ames, we were tasked with first developing a model to predict the Sale Price of houses with three Neighborhoods based on the Square Footage. Next we were tasked with trying to develop a Simple Linear Regression model, and two Multiple Regression Models using any of the variables. 
