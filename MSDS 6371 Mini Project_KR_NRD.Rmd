@@ -1,0 +1,513 @@
+---
+title: "MSDS 6371 Project Description (Weeks 13 and 14"
+author: "Kenya Roy"
+date: "2024-04-10"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = "/path/to/root/directory")
+```
+
+#Read in Train data csv provided by Kaggle at <https://www.kaggle.com/competitions/house-prices-advanced-regression-techniques/data>.
+
+```{r}
+library(tidyverse)
+library(car)
+file_path <- file.choose()
+train <- read.csv(file_path)
+```
+#Review dataset
+```{r}
+head(train)
+summary(train)
+```
+
+#Question 1
+Objective: Get an estimate of how the SalePrice of the house is related to the square footage of the living area of the house (GrLIvArea) and if the SalesPrice (and its relationship to square footage) depends on which neighborhood the house is located in. Build and fit a model that will answer this question, keeping in mind that realtors prefer to talk about living area in increments of 100 sq. ft. Provide Century 21 with the estimate (or estimates if it varies by neighborhood) as well as confidence intervals for any estimate(s) you provide. 
+
+#Select for houses in the following Ames, IA neighborhoods: NAmes, Edwards, and BrkSide.
+#Create a new dataset with 3 selections.
+```{r}
+#Create data sets containing only observations where the neighborhoods match the three of interest.
+match_N <-grepl("NAmes", train$Neighborhood)
+match_E <- grepl("Edwards", train$Neighborhood)
+match_B <- grepl("BrkSide", train$Neighborhood)
+
+#Subset train data set with only rows with neighborhoods of interest.
+new_N <- train[match_N, ]
+new_E <- train[match_E, ]
+new_B <- train[match_B, ]
+
+#Combine new data sets.
+new_train <- rbind(new_N, new_E, new_B)
+```
+
+```{r}
+#Plot GrLIvArea (sq. footage of house) against Sales Price for each neighborhood of interest.
+
+##Scatter Plot of 3 Neighborhoods of Interest
+new_train %>% 
+  ggplot(aes(x = GrLivArea, y = SalePrice, colour = Neighborhood)) +
+  geom_point() + 
+  labs(x = "Square Footage", y = "Sales Price") + 
+  ggtitle("Square Footage vs Sales Price In 3 Neighborhoods of Interest")
+
+##Names Scatter Plot
+new_train %>% filter(Neighborhood == "NAmes") %>% 
+  ggplot(aes(x = GrLivArea, y = SalePrice, colour = Neighborhood)) + 
+  geom_point() + 
+  labs(x = "Square Footage", y = "Sales Price") + 
+  ggtitle("Square Footage vs Sales Price for the NAmes Neighborhood")
+
+##Edwards Scatter Plot
+new_train %>% filter(Neighborhood == "Edwards") %>% 
+  ggplot(aes(x = GrLivArea, y = SalePrice, colour = Neighborhood)) + 
+  geom_point() + 
+  labs(x = "Square Footage", y = "Sales Price") + 
+  ggtitle("Square Footage vs Sales Price for the Edwards Neighborhood")
+
+##Brookside Scatter plot
+new_train %>% filter(Neighborhood == "BrkSide") %>% 
+  ggplot(aes(x = GrLivArea, y = SalePrice, colour = Neighborhood)) + 
+  geom_point() + 
+  labs(x = "Square Footage", y = "Sales Price") + 
+  ggtitle("Square Footage vs Sales Price for the BrkSide Neighborhood")
+
+```
+#Look at residual plots for the neighborhoods
+```{r}
+##Scatter Plot of 3 Neighborhoods of Interest
+new_train %>% 
+  ggplot(aes(x = GrLivArea, y = SalePrice, colour = Neighborhood)) +
+  geom_point() + 
+  geom_smooth(method = "lm", se = FALSE) + 
+  labs(x = "Square Footage", y = "Sales Price") + 
+  ggtitle("Square Footage vs Sales Price In 3 Neighborhoods of Interest")
+
+##NAmes Scatter Plot
+new_train %>% filter(Neighborhood == "NAmes") %>% 
+  ggplot(aes(x = GrLivArea, y = SalePrice, colour = Neighborhood)) + 
+  geom_point() + 
+  geom_smooth(method = "lm", se = FALSE) + 
+  labs(x = "Square Footage", y = "Sales Price") + 
+  ggtitle("Square Footage vs Sales Price for the NAmes Neighborhood")
+
+##Edwards Scatter Plot
+new_train %>% filter(Neighborhood == "Edwards") %>% 
+  ggplot(aes(x = GrLivArea, y = SalePrice, colour = Neighborhood)) + 
+  geom_point() + 
+  geom_smooth(method = "lm", se = FALSE) + 
+  labs(x = "Square Footage", y = "Sales Price") + 
+  ggtitle("Square Footage vs Sales Price for the Edwards Neighborhood")
+
+##Brookside Scatter plot
+new_train %>% filter(Neighborhood == "BrkSide") %>% 
+  ggplot(aes(x = GrLivArea, y = SalePrice, colour = Neighborhood)) + 
+  geom_point() + 
+  geom_smooth(method = "lm", se = FALSE) + 
+  labs(x = "Square Footage", y = "Sales Price") + 
+  ggtitle("Square Footage vs Sales Price for the BrkSide Neighborhood")
+```
+#Looking at the scatterplot of the full dataset, there appears to be a few outliers. There appears to be one outlier for the NAmes neighborhood and 3 outliers in Edwards neighborhood. 
+
+#However, we will look at the Cooks D plot for further analysis. 
+```{r}
+#Linear Regression Model
+fit = lm(SalePrice~GrLivArea + Neighborhood, data = new_train)
+fit_summary <- summary(fit)
+
+#Visualize LRM
+plot(fit)
+
+#Calculate Cook's distances
+cooksd <- cooks.distance(fit)
+
+#Plot Cook's distances
+plot(cooksd, pch = 19, frame = FALSE, main = "Cook's Distance Plot")
+abline(h = 4/length(cooksd), col = "red")  # Add a horizontal line at Cook's distance = 4/n
+```
+#Now we can identify clear outliers in the dataset. In an effort to give our client the best results informed by a best fit model, we will remove these outliers.
+
+##
+```{r}
+#Set a threshold for identifying outliers.
+threshold <- 16/length(cooksd)
+
+#Identify outliers based on Cook's distance exceeding the threshold
+outliers <- which(cooksd > threshold)
+
+#Print the indices of outliers
+print(outliers)
+
+```
+#There are two observations with ID's 524 and 1299 that must be deleted. 
+#Let's gather additional information on these outliers.
+```{r}
+# Print the rows corresponding to the outliers
+print(train[c(524, 1299, 643, 725, 1424), ])
+```
+#In the Edwards neighborhood, there are four outliers. House #524 has a square footage of 4676 and sales price of $184750 while House #1299 has a square footage of 5642 and sales price of $160000. Both of these houses have high square footages for low sales prices which is not typical for the neighorhood. Additionally, House #725 has a square footage of 1698 with a sales price of $320000 and House #1424 has a square footage of 2201 with a sales price of $294970. These homes are priced high for low square footage for the neighborhood. 
+
+#In the NAmes neighborhood, House #643 has a square footage of 2704 with a selling price of $345000. This house has a very high selling price for the area. 
+
+#Consequently, we will strike them from the dataset.
+
+```{r}
+#Create new dataset without outliers.   
+newer_train<- new_train[-c(313, 258, 99, 275, 322), ]
+```
+#Now we will find the linear regression model, adjusted r-squared value, cv press, and confidence intervals.
+```{r}
+#Linear Regression Model
+fit = lm(SalePrice~GrLivArea + Neighborhood, data = newer_train)
+
+#Get values for model 
+summary(fit)
+
+#Visualize LRM
+plot(fit)
+```
+Question #2
+Build the most predictive model for sales prices of homes in all of Ames, Iowa.  This includes all neighborhoods. Your group is limited to only the techniques we have learned in 6371 (no random forests or other methods we have not yet covered).  Specifically, you should produce at least 2 competing models: a simple linear regression model (you pick the explanatory variable) and a multiple linear regression model (SalePrice~GrLivArea + FullBath) and at least one additional multiple linear regression model where you select the explanatory variables.  Generate an adjusted R2, CV Press and Kaggle Score for each of these models and clearly describe which model you feel is the best in terms of being able to predict future sale prices of homes in Ames, Iowa.  
+```{r include = FALSE}
+library(tidyverse)
+library(ggplot2)
+library(scales)
+library(pwr)
+library(agricolae)
+install.packages("huxtable")
+library(huxtable)
+install.packages("lawstat")
+library(lawstat)
+library(lsmeans)
+library(dplyr)
+library(WDI)
+library(investr)
+library(multcomp)
+library(pairwiseCI)
+install.packages("DescTools")
+library(DescTools)
+install.packages("GGally")
+library(GGally)
+install.packages("olsrr")
+library(olsrr)
+library(tidyverse)
+library(car)
+```
+In order to create our simple linear regression, we will use an automatic variable selection technique. 
+Select explanatory variable for determining sales prices of homes in Ames 
+```{r}
+#Review data
+head(train)
+summary(train)
+
+#Create tentative linear regression model to plug into Backward, Forward, and Stepwise Selection Models
+# Load the necessary libraries
+library(MASS)  # For stepAIC function
+
+# Start with an empty model
+best_model <- lm(SalePrice ~ 1, data = train)
+
+# Number of predictors in the dataset
+num_predictors <- ncol(train) - 1  # Excluding the target variable 'SalePrice'
+
+# Initialize variables to store the best predictor and its associated AIC
+best_predictor <- NULL
+best_AIC <- Inf
+
+# Forward selection loop
+for (predictor in names(train)[-which(names(train) == "SalePrice")]) {
+  # Construct formula for current predictor
+  formula_str <- paste("SalePrice ~", predictor)
+  
+  # Fit a model with the current predictor
+  model <- lm(formula_str, data = train)
+  
+  # Compute AIC for the current model
+  model_AIC <- AIC(model)
+  
+  # Update the best predictor if current AIC is lower
+  if (model_AIC < best_AIC) {
+    best_AIC <- model_AIC
+    best_predictor <- predictor
+  }
+}
+
+# Display the best predictor found
+print(best_predictor)
+```
+Using Forward Step Selection, we found that the best predictor variable in the 79 variable dataset is PoolQC. We will use this variable in the simple linear regression model. 
+
+#Selection for top variables
+```{r}
+#TRANSFORM CAT VARS TO FACTORS AND TRY STEPWISE
+
+# Identify variables with categorical data types
+categorical_vars <- sapply(train, function(x) is.factor(x) || is.character(x))
+
+# List variables with categorical data types
+cat_vars_names <- names(categorical_vars)[categorical_vars]
+cat_vars_names
+
+# Convert variables with categorical data types to factors
+train[, cat_vars_names] <- lapply(train[, cat_vars_names], as.factor)
+
+fit <- lm(SalePrice ~ ., data = train)
+result <- ols_step_both_p(fit, penter = 0.01, prem = 0.05, details = FALSE)
+
+# Filter the output of str() to only display factor variables
+str(train[, sapply(train, is.factor)])
+
+# Check levels of each factor variable
+lapply(train[, cat_vars_names], function(x) levels(x))
+
+```
+
+
+#####NOLAN: This is what I found will work, I'm not sure why you need to take the these variables out, but you don't get a error when they are not included. The only reason why I can think of is that these variables have a lot of NA's in them and the lm() function does not like that.  
+
+####trainNEW = subset(train, select=-c(Id, PoolQC,Fence, MiscFeature, Alley, Utilities))
+####lm1 = lm(SalePrice ~ ., data = trainNEW)
+
+#In the process of running the forward step, we found that the PoolQC, Fence, MiscFeature, Alley, and Utilities variables had a number of NA values that were not suitable to be run in a linea regression model. We dropped those variables from the dataset and ran stepwise step again.
+```{r}
+trainNEW = subset(train, select=-c(PoolQC, Fence, MiscFeature, Alley, Utilities))
+
+fit <- lm(SalePrice ~ ., data = trainNEW)
+```
+
+#Now we will try stepwise selection.
+```{r}
+# Stepwise
+
+# Perform stepwise selection with different p-values for entering and exiting variables
+result <- ols_step_both_p(fit, penter = 0.01, prem = 0.05, details = FALSE)
+print(result)
+```
+With the stepwise model selection, we found the two best fit variables to be OverallQual and GrLivArea. These two, along with FullBath, will be used in the Linear regression model and multiple linear regression models we intend to conduct. Before running those models, we first want to check assumptions and assess the normality of the data.
+
+```{r}
+# Create scatterplot matrix
+ggpairs(trainNEW[, c("OverallQual", "GrLivArea", "FullBath", "SalePrice")])
+```
+#There is visual evidence of a relationship between overall qual and GrLivArea, OverallQual and FullBath, OverallQual and SalePrice, GrLivArea and FullBath, FullBath and SalePrice. There appears to be a linear relationship between GrLivArea and SalePrice with outliers (those we struck out in the first problem).
+
+#We will assess outliers in the models we create below.
+```{r}
+#Simple Linear Regression
+SLR = lm(SalePrice ~ OverallQual, data = trainNEW)
+summary(SLR)
+
+#Visualize SLR
+plot(SLR)
+
+#Calculate Cook's distances
+cooksd <- cooks.distance(SLR)
+
+#Plot Cook's distances
+plot(cooksd, pch = 19, frame = FALSE, main = "Cook's Distance Plot")
+abline(h = 4/length(cooksd), col = "red")  # Add a horizontal line at Cook's distance = 4/n
+```
+#The qqplot and cook's d plots show evidence of outliers. In an effort to give Century21 Ames the best results informed by a best fit model, we will remove these outliers.
+```{r}
+#Set a threshold for identifying outliers.
+threshold <- 16/length(cooksd)
+
+#Identify outliers based on Cook's distance exceeding the threshold
+outliers <- which(cooksd > threshold)
+
+#Print the indices of outliers
+print(outliers)
+```
+#There are 20 outliers in the dataset. We will select and delete them now.
+```{r}
+print(trainNEW[c(179,186,350,376,441,458,474,497,524,528,534,592,692,770,799,804,899,1047,1170,1183,1244,1299,1374), ])
+trainNEWER<- trainNEW[-c(179,186,350,376,441,458,474,497,524,528,534,592,692,770,799,804,899,1047,1170,1183,1244,1299,1374), ]
+
+#Simple linear regression
+SLR_2 = lm(SalePrice ~ OverallQual, data = trainNEWER)
+summary(SLR_2)
+
+#Calculate Cook's distances
+cooksd <- cooks.distance(SLR_2)
+
+#Plot Cook's distances
+plot(cooksd, pch = 19, frame = FALSE, main = "Cook's Distance Plot")
+abline(h = 4/length(cooksd), col = "red")  # Add a horizontal line at Cook's distance = 4/n
+```
+#The residuals are better fit on the qqplot and the cook's d plot shows differences in residuals on a much smaller scale. Outliers have been sufficiently eliminated. 
+#Now we will visualize and assess the simple linear regression.
+```{r}
+#Summarize Simple linear model
+summary(SLR_2)
+
+#Visualize LRM
+plot(SLR_2)
+
+#Find Adjusted R-Squared Value
+SLR_2_fit_summary <- summary(SLR_2)
+SLR_2_adj_r_squared <- SLR_2_fit_summary$adj.r.squared
+print(SLR_2_adj_r_squared)
+
+#Find CV Press
+SLR_2_internal_cv_press <- SLR_2_fit_summary$cov.unscaled
+print(SLR_2_internal_cv_press)
+```
+#Now we will run a Multiple Linear Regression with the variables you all provided wherein GrLivArea + FullBath predict SalePrice.
+```{r}
+#Multiple Linear Regression
+MLR_C21 = lm(SalePrice ~ GrLivArea + FullBath, data = trainNEW)
+summary(MLR_C21)
+
+#Visualize multiple linear regression 
+plot(MLR_C21)
+
+#Calculate Cook's distances
+cooksd <- cooks.distance(MLR_C21)
+
+#Plot Cook's distances
+plot(cooksd, pch = 19, frame = FALSE, main = "Cook's Distance Plot")
+abline(h = 4/length(cooksd), col = "red")  # Add a horizontal line at Cook's distance = 4/n
+```
+#There are clearly some outliers in this plot.
+
+```{r}
+#Set a threshold for identifying outliers.
+threshold <-32/length(cooksd)
+
+#Identify outliers based on Cook's distance exceeding the threshold
+outliers <- which(cooksd > threshold)
+
+#Print the indices of outliers
+print(outliers)
+```
+```{r}
+print(trainNEW[c(54,441,524,636,665,692,770,804,899,1047,1170,1183,1299), ])
+trainNEWEST<- trainNEW[-c(54,441,524,636,665,692,770,804,899,1047,1170,1183,1299), ]
+
+#Simple linear regression
+MLR_C21_2 = lm(SalePrice ~ GrLivArea + FullBath, data = trainNEWEST)
+summary(MLR_C21_2)
+plot(MLR_C21_2)
+
+#Calculate Cook's distances
+cooksd <- cooks.distance(MLR_C21_2)
+
+#Plot Cook's distances
+plot(cooksd, pch = 19, frame = FALSE, main = "Cook's Distance Plot")
+abline(h = 4/length(cooksd), col = "red")  # Add a horizontal line at Cook's distance = 4/n
+```
+#The residuals are better fit on the qqplot and the cook's d plot shows differences in residuals on a much smaller scale. We also got rid of the outlier with high leverage. Outliers have been sufficiently eliminated. 
+#Now we will visualize and assess the simple linear regression.
+```{r}
+#Summarize Simple linear model
+summary(MLR_C21_2)
+
+#Visualize LRM
+plot(MLR_C21_2)
+
+#Find Adjusted R-Squared Value
+MLR_C21_2_fit_summary <- summary(MLR_C21_2)
+MLR_C21_2_adj_r_squared <- MLR_C21_2_fit_summary$adj.r.squared
+print(MLR_C21_2_adj_r_squared)
+
+#Find CV Press
+MLR_C21_2_internal_cv_press <- MLR_C21_2_fit_summary$cov.unscaled
+print(MLR_C21_2_internal_cv_press)
+
+```
+#Judging from the parameter estimate table, there is overwhelming evidence to suggest that the combination of GrLivArea and FullBath are statistically significant in predicting SalePrice.
+
+#Our team was able to develop a model that similarly predicts sale price.
+```{r}
+MLR = lm(SalePrice ~ OverallQual + GrLivArea, data = trainNEW)
+summary(MLR)
+
+#Visualize multiple linear regression 
+plot(MLR)
+
+#Calculate Cook's distances
+cooksd <- cooks.distance(MLR)
+
+#Plot Cook's distances
+plot(cooksd, pch = 19, frame = FALSE, main = "Cook's Distance Plot")
+abline(h = 4/length(cooksd), col = "red")  # Add a horizontal line at Cook's distance = 4/n
+```
+#There are clearly some outliers in this plot. Let's identify and remove them if necessary.
+```{r}
+#Set a threshold for identifying outliers.
+threshold <-32/length(cooksd)
+
+#Identify outliers based on Cook's distance exceeding the threshold
+outliers <- which(cooksd > threshold)
+
+#Print the indices of outliers
+print(outliers)
+```
+#Remove the outliers and reassess model fit. 
+```{r}
+print(trainNEW[c(179,441,524,692,770,804,899,1047,1170,1183,1299), ])
+trainNEW_MLR<- trainNEW[-c(179,441,524,692,770,804,899,1047,1170,1183,1299), ]
+
+#Simple linear regression
+MLR_2 = lm(SalePrice ~ OverallQual + GrLivArea, data = trainNEW_MLR)
+summary(MLR_2)
+plot(MLR_2)
+
+#Calculate Cook's distances
+cooksd <- cooks.distance(MLR_2)
+
+#Plot Cook's distances
+plot(cooksd, pch = 19, frame = FALSE, main = "Cook's Distance Plot")
+abline(h = 4/length(cooksd), col = "red")  # Add a horizontal line at Cook's distance = 4/n
+```
+#The residuals are better fit on the qqplot and the cook's d plot shows differences in residuals on a much smaller scale. We also got rid of an outlier with relatively high leverage. Outliers have been sufficiently eliminated. 
+
+#Now we will visualize and assess the multiple linear regression.
+```{r}
+#Summarize Simple linear model
+summary(MLR_2)
+
+#Visualize LRM
+plot(MLR_2)
+
+#Find Adjusted R-Squared Value
+MLR_2_fit_summary <- summary(MLR_2)
+MLR_2_adj_r_squared <- MLR_2_fit_summary$adj.r.squared
+print(MLR_2_adj_r_squared)
+
+#Find CV Press
+MLR_2_internal_cv_press <- MLR_2_fit_summary$cov.unscaled
+print(MLR_2_internal_cv_press)
+
+```
+#Judging from the parameter estimate table, there is overwhelming evidence to suggest that the combination of OverallQual and GrLivArea are statistically significant in predicting SalePrice.
+
+#Comparing the three models, our multiple linear regression model is best fit, evidenced by the higher r-squared, adjusted r-squared, CV press values. 
+
+
+```{r}
+test<- read.csv(choose.files())
+head(test)
+
+
+
+predictions_SLR <- predict(SLR_2, newdata = test)
+head(predictions_SLR)
+test$SalePrice_Predicted <- predictions_SLR
+SLR_test <- test[c("Id", "SalePrice_Predicted")]
+write.csv(SLR_test, "SLR_predictions.csv", row.names = FALSE)
+
+predictions_MLR_C21_2 <- predict(MLR_C21_2, newdata = test)
+head(predictions_MLR_C21_2)
+test$SalePrice_Predicted2 <- predictions_MLR_C21_2
+MLR_test <- test[c("Id", "SalePrice_Predicted2")]
+write.csv(MLR_test, "MLR_C21_2_predictions.csv", row.names = FALSE)
+
+predictions_MLR_2 <- predict(MLR_2, newdata = test)
+head(predictions_MLR_2)
+test$SalePrice_Predicted3 <- predictions_MLR_2
+MLR_2_test <- test[c("Id", "SalePrice_Predicted3")]
+write.csv(MLR_2_test, "MLR_2_predictions.csv", row.names = FALSE)
